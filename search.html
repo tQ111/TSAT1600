@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tim is tuff</title>
+  <link rel="icon" type="image/png" href="MYsatlogo.png">
+  <link rel="shortcut icon" type="image/png" href="MYsatlogo.png">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 100vh;
+      background: var(--bg); padding: 32px 16px;
+    }
+    .filter-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 36px 40px;
+      width: 100%; max-width: 560px;
+      display: flex; flex-direction: column; gap: 24px;
+    }
+    .filter-card-title { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--accent); letter-spacing: -0.3px; }
+    .filter-section { display: flex; flex-direction: column; gap: 10px; }
+    .filter-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-light); }
+    .pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      padding: 6px 16px; border-radius: 20px; border: 1.5px solid var(--border);
+      background: var(--surface); font-family: var(--sans); font-size: 13px;
+      font-weight: 500; color: var(--text-muted); cursor: pointer;
+      transition: all 0.15s; user-select: none;
+    }
+    .pill:hover { border-color: var(--accent); color: var(--accent); }
+    .pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+    [data-group="diff"][data-val="E"].pill.active { background: #e8f5ec; border-color: #02912b; color: #1a6b3a; }
+    [data-group="diff"][data-val="M"].pill.active { background: #fff4e0; border-color: #8b5e00; color: #8b5e00; }
+    [data-group="diff"][data-val="H"].pill.active { background: #fdeaea; border-color: #8b1a1a; color: #8b1a1a; }
+    .pill.all-pill.active { background: var(--accent); opacity: 0.7; }
+    .search-btn {
+      padding: 12px; background: var(--accent); color: white; border: none;
+      border-radius: 8px; font-family: var(--sans); font-size: 14px;
+      font-weight: 500; cursor: pointer; transition: opacity 0.15s; width: 100%;
+    }
+    .search-btn:hover { opacity: 0.85; }
+    .search-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .back-link { font-size: 13px; color: var(--text-light); text-decoration: none; text-align: center; }
+    .back-link:hover { color: var(--accent); }
+    .skill-loading { font-size: 12px; color: var(--text-light); font-style: italic; }
+    .skill-topic-group { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+    .skill-topic-group:first-child { padding-top: 0; border-top: 0; }
+    .skill-topic-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.55px; color: var(--text-light); }
+    .skill-topic-status { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-light); font-style: italic; }
+    .skill-topic-items { display: flex; flex-direction: column; gap: 4px; }
+    .skill-item { font-size: 14px; color: var(--text-muted); font-family: var(--serif); font-style: italic; padding: 3px 0; line-height: 1.5; }
+    .skill-empty { font-size: 12px; color: var(--text-light); font-style: italic; padding: 3px 0; }
+  </style>
+</head>
+<body>
+  <div class="filter-card">
+    <div class="filter-card-title">where we landing</div>
+
+    <div class="filter-section">
+      <div class="filter-section-label">difficulty</div>
+      <div class="pill-group">
+        <button class="pill" data-group="diff" data-val="E" onclick="togglePill(this,'diff')">easy</button>
+        <button class="pill" data-group="diff" data-val="M" onclick="togglePill(this,'diff')">mid</button>
+        <button class="pill" data-group="diff" data-val="H" onclick="togglePill(this,'diff')">hard</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <div class="filter-section-label">section</div>
+      <div class="pill-group">
+        <button class="pill" data-group="section" data-val="math" onclick="togglePill(this,'section')">math</button>
+        <button class="pill" data-group="section" data-val="rw" onclick="togglePill(this,'section')">reading & writing</button>
+      </div>
+    </div>
+
+    <div class="filter-section" id="topicSection" style="display:none;">
+      <div class="filter-section-label">topic</div>
+      <div class="pill-group" id="topicGroup"></div>
+    </div>
+
+    <div class="filter-section" id="skillSection" style="display:none;">
+      <div class="filter-section-label">skills</div>
+      <div id="skillList" style="display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+
+    <button class="search-btn" id="searchBtn" onclick="doSearch()" disabled>search</button>
+    <a href="index.html" class="back-link">← back</a>
+  </div>
+
+  <script>
+    const DOMAINS = {
+      math: [
+        { id: 'H', label: 'algebra' },
+        { id: 'P', label: 'advanced math' },
+        { id: 'Q', label: 'problem solving' },
+        { id: 'S', label: 'geometry & trig' },
+      ],
+      rw: [
+        { id: 'INI', label: 'information & ideas' },
+        { id: 'CAS', label: 'craft & structure' },
+        { id: 'EOI', label: 'expression of ideas' },
+        { id: 'SEC', label: 'standard english' },
+      ]
+    };
+    const API = 'https://qbank-api.collegeboard.org/msreportingquestionbank-prod/questionbank/digital';
+
+    const sel = { section: null, diffs: new Set(), topics: new Set() };
+    const skillGroups = new Map();
+    const skillControllers = new Map();
+    let sectionGeneration = 0;
+    let skillRefreshTimer = null;
+
+    function cancelSkillRequests() {
+      skillControllers.forEach(controller => controller.abort());
+      skillControllers.clear();
+      clearTimeout(skillRefreshTimer);
+    }
+
+    function togglePill(btn, group) {
+      if (group === 'section') {
+        const alreadyActive = btn.classList.contains('active');
+        document.querySelectorAll('[data-group="section"]').forEach(b => b.classList.remove('active'));
+        if (alreadyActive) {
+          cancelSkillRequests();
+          sel.section = null; sel.topics.clear();
+          skillGroups.clear(); sectionGeneration++;
+          document.getElementById('topicSection').style.display = 'none';
+          document.getElementById('skillSection').style.display = 'none';
+          document.getElementById('topicGroup').innerHTML = '';
+          document.getElementById('skillList').innerHTML = '';
+        } else {
+          cancelSkillRequests();
+          btn.classList.add('active');
+          sel.section = btn.dataset.val;
+          sel.topics.clear();
+          skillGroups.clear(); sectionGeneration++;
+          renderTopics(btn.dataset.val);
+          document.getElementById('topicSection').style.display = 'flex';
+          document.getElementById('skillSection').style.display = 'none';
+          document.getElementById('skillList').innerHTML = '';
+        }
+      } else if (group === 'diff') {
+        btn.classList.toggle('active');
+        sel.diffs.has(btn.dataset.val) ? sel.diffs.delete(btn.dataset.val) : sel.diffs.add(btn.dataset.val);
+        scheduleSkillRefresh();
+      } else if (group === 'topic') {
+        btn.classList.toggle('active');
+        if (sel.topics.has(btn.dataset.val)) {
+          sel.topics.delete(btn.dataset.val);
+          skillControllers.get(btn.dataset.val)?.abort();
+          skillControllers.delete(btn.dataset.val);
+          skillGroups.delete(btn.dataset.val);
+          document.getElementById(`skillGroup-${btn.dataset.val}`)?.remove();
+        } else {
+          sel.topics.add(btn.dataset.val);
+          appendSkillGroup(btn.dataset.val);
+          fetchSkillsForTopic(btn.dataset.val);
+        }
+        document.getElementById('skillSection').style.display = sel.topics.size > 0 ? 'flex' : 'none';
+      }
+      updateBtn();
+    }
+
+    function renderTopics(section) {
+      const group = document.getElementById('topicGroup');
+      group.innerHTML = '';
+      DOMAINS[section].forEach(d => {
+        const btn = document.createElement('button');
+        btn.className = 'pill'; btn.dataset.group = 'topic'; btn.dataset.val = d.id;
+        btn.textContent = d.label;
+        btn.onclick = () => togglePill(btn, 'topic');
+        group.appendChild(btn);
+      });
+    }
+
+    function topicLabel(topicId) {
+      return (DOMAINS[sel.section] || []).find(topic => topic.id === topicId)?.label || topicId;
+    }
+
+    function appendSkillGroup(topicId) {
+      if (document.getElementById(`skillGroup-${topicId}`)) return;
+      const group = document.createElement('div');
+      group.className = 'skill-topic-group';
+      group.id = `skillGroup-${topicId}`;
+      group.innerHTML = `
+        <div class="skill-topic-heading"><span>${topicLabel(topicId)}</span></div>
+        <div class="skill-topic-status" id="skillStatus-${topicId}">loading…</div>
+        <div class="skill-topic-items" id="skillItems-${topicId}"></div>`;
+      document.getElementById('skillList').appendChild(group);
+      document.getElementById('skillSection').style.display = 'flex';
+    }
+
+    async function fetchSkillsForTopic(topicId) {
+      if (!sel.section || !sel.topics.has(topicId)) return;
+      appendSkillGroup(topicId);
+
+      const generation = sectionGeneration;
+      const requestId = (skillGroups.get(topicId)?.requestId || 0) + 1;
+      const previousSkills = skillGroups.get(topicId)?.skills || [];
+      skillGroups.set(topicId, { skills: previousSkills, requestId });
+      skillControllers.get(topicId)?.abort();
+      const controller = new AbortController();
+      skillControllers.set(topicId, controller);
+
+      const status = document.getElementById(`skillStatus-${topicId}`);
+      if (status) status.textContent = 'loading…';
+
+      try {
+        const test = sel.section === 'math' ? 2 : 1;
+        const response = await fetch(`${API}/get-questions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asmtEventId: 99, test, domain: topicId }),
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error(`request failed (${response.status})`);
+
+        const all = await response.json();
+        if (generation !== sectionGeneration || !sel.topics.has(topicId)) return;
+        if (skillGroups.get(topicId)?.requestId !== requestId) return;
+
+        const filtered = sel.diffs.size > 0 ? all.filter(q => sel.diffs.has(q.difficulty)) : all;
+        const skills = [...new Set(filtered.map(q => q.skill_desc || q.skillDesc || '').filter(Boolean))];
+        skillGroups.set(topicId, { skills, requestId });
+        renderSkillGroup(topicId, skills);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        if (generation !== sectionGeneration || !sel.topics.has(topicId)) return;
+        if (skillGroups.get(topicId)?.requestId !== requestId) return;
+        const currentStatus = document.getElementById(`skillStatus-${topicId}`);
+        if (currentStatus) currentStatus.textContent = 'failed to load';
+      } finally {
+        if (skillControllers.get(topicId) === controller) skillControllers.delete(topicId);
+      }
+    }
+
+    function renderSkillGroup(topicId, skills) {
+      const items = document.getElementById(`skillItems-${topicId}`);
+      const status = document.getElementById(`skillStatus-${topicId}`);
+      if (!items || !status) return;
+      items.innerHTML = '';
+      status.textContent = '';
+
+      if (!skills.length) {
+        items.innerHTML = '<div class="skill-empty">no matching skills for the selected difficulty</div>';
+        return;
+      }
+
+      skills.forEach(skill => {
+        const el = document.createElement('div');
+        el.className = 'skill-item';
+        el.textContent = skill;
+        items.appendChild(el);
+      });
+    }
+
+    function refreshSelectedSkills() {
+      sel.topics.forEach(topicId => fetchSkillsForTopic(topicId));
+    }
+
+    function scheduleSkillRefresh() {
+      clearTimeout(skillRefreshTimer);
+      skillRefreshTimer = setTimeout(refreshSelectedSkills, 200);
+    }
+
+    function updateBtn() {
+      document.getElementById('searchBtn').disabled =
+        !(sel.section && sel.diffs.size > 0 && sel.topics.size > 0);
+    }
+
+    function doSearch() {
+      const params = new URLSearchParams({
+        section: sel.section,
+        diffs: [...sel.diffs].join(','),
+        topics: [...sel.topics].join(','),
+      });
+      window.location.href = `questions.html?${params.toString()}`;
+    }
+  </script>
+</body>
+</html>
