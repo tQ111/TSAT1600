@@ -43,12 +43,13 @@
     .content { flex: 1; display: flex; overflow: hidden; border-top: none; }
     .passage-panel + .question-panel { border-left: 1.5px solid #e0ddd7; }
     .passage-text { font-family: var(--serif); font-size: 16px; line-height: 1.85; color: var(--text); max-width: 100%; overflow-x: auto; text-align: left; }
-    .passage-text figure, .passage-text p:has(svg), .passage-text p:has(img) { text-align: center; }
+    .passage-text figure, .passage-text p:has(svg), .passage-text p:has(img),
+    .question-stem figure, .question-stem p:has(svg), .question-stem p:has(img) { text-align: center; }
     .passage-text p { margin-bottom: 14px; }
     .passage-text p:last-child { margin-bottom: 0; }
-    .passage-text figure { margin: 16px 0; text-align: center; }
-    .passage-text img { max-width: 100%; height: auto; }
-    .passage-text svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    .passage-text figure, .question-stem figure { margin: 16px 0; text-align: center; }
+    .passage-text img, .question-stem img { max-width: 100%; height: auto; }
+    .passage-text svg, .question-stem svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
     .passage-text table, .question-stem table { border-collapse: collapse; margin: 12px auto; font-family: var(--serif); font-size: 15px; }
     .passage-text th, .passage-text td, .question-stem th, .question-stem td { border: 1px solid #bbb; padding: 6px 18px; text-align: center; }
     .passage-text th, .question-stem th { background: #f0eeea; font-weight: 600; }
@@ -569,7 +570,7 @@
       node.removeAttribute('role');
     }
   });
-  sourceRoot.querySelectorAll('[class*="sr-only"],[aria-label*="Long description" i]').forEach(node=>{
+  sourceRoot.querySelectorAll('[class*="sr-only"],[aria-label^="Long description" i]').forEach(node=>{
     if(!node.classList.contains('referenced-content')) node.remove();
   });
   sourceRoot.querySelectorAll('[role="region"]').forEach(node=>node.removeAttribute('role'));
@@ -625,6 +626,57 @@ function formatNotes(html) {
   ).join('');
   return intro + `<ul>${items}</ul>`;
 }
+
+  function sanitizeSPRInput(value) {
+    return String(value||'')
+      .replace(/\s+/g,'')
+      .replace(/[^0-9./-]/g,'')
+      .slice(0,5);
+  }
+
+  function parseSPRValue(value) {
+    const text=String(value||'').trim();
+    const fraction=text.match(/^(-?\d+)\/(\d+)$/);
+    if(fraction){
+      const denominator=Number(fraction[2]);
+      if(!denominator) return null;
+      return Number(fraction[1])/denominator;
+    }
+    if(!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+    const number=Number(text);
+    return Number.isFinite(number)?number:null;
+  }
+
+  function isCompleteSPRInput(value) {
+    return parseSPRValue(value)!==null;
+  }
+
+  function isSPRCorrect(value,keys) {
+    const answer=String(value||'').trim();
+    const accepted=(keys||[]).map(key=>String(key).trim());
+    if(accepted.includes(answer)) return true;
+
+    const answerNumber=parseSPRValue(answer);
+    if(answerNumber===null) return false;
+    const close=(a,b)=>Math.abs(a-b)<1e-10;
+
+    return accepted.some(key=>{
+      const keyNumber=parseSPRValue(key);
+      if(keyNumber===null) return false;
+      if(close(answerNumber,keyNumber)) return true;
+
+      // SAT grid-ins accept a repeating decimal when it is either truncated
+      // or rounded to fit the available response boxes. Require at least
+      // three decimal places so a rough approximation such as 0.7 is rejected.
+      const decimalMatch=answer.match(/\.(\d+)$/);
+      if(!decimalMatch||decimalMatch[1].length<3) return false;
+      const places=decimalMatch[1].length;
+      const factor=10**places;
+      const truncated=Math.trunc(keyNumber*factor)/factor;
+      const rounded=Math.sign(keyNumber)*Math.round(Math.abs(keyNumber)*factor)/factor;
+      return close(answerNumber,truncated)||close(answerNumber,rounded);
+    });
+  }
 
   function formatSPRPreview(val) {
     let s = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -745,11 +797,10 @@ function formatNotes(html) {
       ))).flat();
       if (diffs.size>0) all = all.filter(q=>diffs.has(q.difficulty));
       const seenQuestionIds = new Set();
-      all = all.filter(q => {
-        const id = String(q.external_id || '').trim();
-
-        if (!id || seenQuestionIds.has(id)) return false;
-
+      all = all.filter(q=>{
+        const id=String(q.external_id||'').trim();
+        if(!id) return false;
+        if(seenQuestionIds.has(id)) return false;
         seenQuestionIds.add(id);
         return true;
       });
@@ -861,7 +912,7 @@ function formatNotes(html) {
       const isNotesList = /following notes/i.test(rawLeft);
       left.innerHTML=`<div class="passage-text">${isNotesList ? formatNotes(cleanBlanks(rawLeft)) : cleanBlanks(rawLeft)}</div>`;
       // remove sr-only and graph description elements from rendered DOM
-      left.querySelectorAll('[class*="sr-only"]:not(.referenced-content),[aria-label*="Long description" i]:not(.referenced-content)').forEach(el=>el.remove());
+      left.querySelectorAll('[class*="sr-only"]:not(.referenced-content),[aria-label^="Long description" i]:not(.referenced-content)').forEach(el=>el.remove());
       if (hasStim&&stem){const se=document.createElement('div');se.className='question-stem';se.innerHTML=cleanBlanks(stem);body.appendChild(se);}
       buildChoices(isSPR,opts,body,aa,false);
       const right=document.createElement('div'); right.className='question-panel';
@@ -874,7 +925,7 @@ function formatNotes(html) {
       body.appendChild(qbar);
       if (stem){
         const se=document.createElement('div');se.className='question-stem';se.innerHTML=cleanBlanks(stem);
-        se.querySelectorAll('[class*="sr-only"]:not(.referenced-content),[aria-label*="Long description" i]:not(.referenced-content)').forEach(el=>el.remove());
+        se.querySelectorAll('[class*="sr-only"]:not(.referenced-content),[aria-label^="Long description" i]:not(.referenced-content)').forEach(el=>el.remove());
         body.appendChild(se);
       }
       buildChoices(isSPR,opts,body,aa,true);
@@ -891,15 +942,16 @@ function formatNotes(html) {
       const wrap=document.createElement('div'); wrap.className='spr-wrapper';
       wrap.innerHTML=`
         <div class="spr-label">enter your answer</div>
-        <input id="sprInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        <input id="sprInput" type="text" inputmode="decimal" maxlength="5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          aria-describedby="sprHint"
           style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--serif);font-size:15px;outline:none;" placeholder="your answer…">
         <div style="margin-top:6px;padding:8px 12px;background:#f7f6f3;border-radius:6px;border:1px solid var(--border-light);">
           <div style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">your answer will display as</div>
           <div id="sprPreview" style="font-family:var(--serif);font-size:15px;color:var(--text);min-height:22px;">&nbsp;</div>
         </div>
-        <div class="spr-hint">^ for exponents &nbsp;·&nbsp; / for fractions &nbsp;·&nbsp; e.g.
-          <code style="font-size:11px;background:#ece9e2;padding:1px 4px;border-radius:3px;">x^2</code>
-          <code style="font-size:11px;background:#ece9e2;padding:1px 4px;border-radius:3px;">3/4</code></div>`;
+        <div class="spr-hint" id="sprHint">5 characters maximum &nbsp;·&nbsp; decimals or fractions &nbsp;·&nbsp; e.g.
+          <code style="font-size:11px;background:#ece9e2;padding:1px 4px;border-radius:3px;">.667</code>
+          <code style="font-size:11px;background:#ece9e2;padding:1px 4px;border-radius:3px;">2/3</code></div>`;
       body.appendChild(wrap);
       aa.innerHTML=`<button class="submit-btn" id="submitBtn" onclick="submitSPR()" title="Submit answer (Enter)" aria-keyshortcuts="Enter" disabled style="${centered?'align-self:center':'align-self:flex-end'}">Submit <kbd class="shortcut-key" aria-hidden="true">Enter</kbd></button>`;
       setTimeout(()=>{
@@ -908,9 +960,11 @@ function formatNotes(html) {
         const sb=document.getElementById('submitBtn');
         if(!inp||!pre) return;
         inp.addEventListener('input',()=>{
-          const v=inp.value.trim();
-          pre.innerHTML=v?formatSPRPreview(inp.value):'&nbsp;';
-          if(sb) sb.disabled=!v;
+          const cleaned=sanitizeSPRInput(inp.value);
+          if(inp.value!==cleaned) inp.value=cleaned;
+          const v=cleaned.trim();
+          pre.innerHTML=v?formatSPRPreview(v):'&nbsp;';
+          if(sb) sb.disabled=!isCompleteSPRInput(v);
         });
       },0);
     } else if (!opts.length) {
@@ -1049,7 +1103,7 @@ function formatNotes(html) {
     const currentId=questionKey(questions[currentIdx]);
     const existing=getAnswer(currentId);
     const frozenSeconds=existing?.timeSeconds??freezeTimer();
-    const val=inp.value.trim(), cids=new Set((currentQ.keys||[]).map(String)), ok=cids.has(val);
+    const val=sanitizeSPRInput(inp.value), cids=new Set((currentQ.keys||[]).map(String)), ok=isSPRCorrect(val,[...cids]);
     const result=ok?'correct':'incorrect';
     saveAnswer(currentId,existing
       ? {...existing,latestResult:result,sprValue:val,attempts:(existing.attempts||1)+1}
